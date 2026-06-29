@@ -33,6 +33,13 @@
     },
     "config": {
         "sort-packages": true,
-        "optimize-autoloader": true
+        "optimize-autoloader": true,
+        "platform": {
+            "php": "8.2"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "phar": "@php -d phar.readonly=0 build/build-phar.php"
     }
 }
