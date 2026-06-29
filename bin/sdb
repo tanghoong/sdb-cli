@@ -1,0 +1,29 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+namespace Sdb;
+
+use Sdb\Console\SdbApplication;
+
+// Locate the Composer autoloader whether running from source, as a global
+// Composer install, or from inside the packaged .phar.
+(static function (): void {
+    $candidates = [
+        __DIR__ . '/../vendor/autoload.php',        // cloned repo / `composer global require` / inside phar
+        __DIR__ . '/../../../autoload.php',         // installed as a dependency in someone else's vendor/
+    ];
+
+    foreach ($candidates as $file) {
+        if (is_file($file)) {
+            require $file;
+            return;
+        }
+    }
+
+    fwrite(STDERR, "sdb: Composer autoloader not found. Run `composer install` first.\n");
+    exit(3);
+})();
+
+exit((new SdbApplication())->run());
