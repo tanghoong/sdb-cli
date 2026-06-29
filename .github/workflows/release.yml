@@ -1,0 +1,85 @@
+name: Release
+
+# Tag a release to publish the phar:
+#   git tag v0.1.0 && git push origin v0.1.0
+# This builds sdb.phar, generates its SHA-256, and attaches both to a GitHub
+# Release — the assets the README's install step downloads and verifies.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & publish phar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          set -euo pipefail
+          ref="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "name=$ref" >> "$GITHUB_OUTPUT"
+          echo "version=${ref#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: json, pdo_sqlite
+          coverage: none
+          ini-values: phar.readonly=0
+          tools: composer:v2
+
+      - name: Install runtime dependencies only
+        run: composer install --no-dev --prefer-dist --no-progress --optimize-autoloader
+
+      - name: Build phar
+        run: php build/build-phar.php
+
+      - name: Verify the phar version matches the tag
+        run: |
+          set -euo pipefail
+          want="${{ steps.tag.outputs.version }}"
+          got="$(php sdb.phar --version | awk '{print $2}')"
+          if [ "$got" != "$want" ]; then
+            echo "::error::Tag is v$want but the phar reports version $got."
+            echo "Bump SdbApplication::VERSION to $want before tagging."
+            exit 1
+          fi
+          echo "phar version $got matches tag."
+
+      - name: Smoke-test the phar
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          php sdb.phar put users alice '{"name":"Alice"}' --data "$tmp"
+          got="$(php sdb.phar get users alice --raw --data "$tmp")"
+          test "$got" = '{"name":"Alice"}'
+          php sdb.phar put p 1 '{"price":100}' --adapter sqlite --data "$tmp"
+          php sdb.phar find p --where price:lt:500 --adapter sqlite --data "$tmp" --raw
+          echo "phar smoke test passed"
+
+      - name: Generate SHA-256 checksum
+        run: sha256sum sdb.phar > sdb.phar.sha256
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: ${{ steps.tag.outputs.name }}
+          generate_release_notes: true
+          make_latest: ${{ !contains(steps.tag.outputs.name, '-') }}
+          prerelease: ${{ contains(steps.tag.outputs.name, '-') }}
+          files: |
+            sdb.phar
+            sdb.phar.sha256
