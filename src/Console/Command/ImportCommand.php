@@ -32,6 +32,19 @@ final class ImportCommand extends AbstractStorageCommand
     /** Flush documents in batches of this size — one transaction per chunk on sqlite. */
     private const BATCH_SIZE = 1000;
 
+    /**
+     * Hard cap on a single NDJSON line. A plain `fgets($stream)` reads until the
+     * next newline with no upper bound, so one malformed multi-gigabyte "line"
+     * (no newline) would be pulled entirely into memory. We accumulate in chunks
+     * and abort once a line crosses this limit, keeping import memory bounded.
+     * Set comfortably above the engine's 5 MiB per-document limit to leave room
+     * for the `_id` field and JSON whitespace.
+     */
+    private const MAX_LINE_BYTES = 16 * 1024 * 1024;
+
+    /** Chunk size for the bounded line reader. */
+    private const READ_CHUNK_BYTES = 1024 * 1024;
+
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $db     = $this->openDb($input);
@@ -58,7 +71,7 @@ final class ImportCommand extends AbstractStorageCommand
         };
 
         try {
-            while (($line = fgets($stream)) !== false) {
+            while (($line = $this->readLine($stream, $lineNo + 1)) !== false) {
                 $lineNo++;
                 $line = trim($line);
                 if ($line === '') {
@@ -90,6 +103,44 @@ final class ImportCommand extends AbstractStorageCommand
         $output->writeln((string) $count);
 
         return SdbApplication::EXIT_SUCCESS;
+    }
+
+    /**
+     * Read one NDJSON line with a hard length cap.
+     *
+     * Accumulates the line in fixed-size chunks and throws once it crosses
+     * MAX_LINE_BYTES, so a pathological newline-free input cannot exhaust memory.
+     * Returns the full line (including any trailing newline), or false at EOF.
+     *
+     * @param  resource $stream
+     * @param  int      $lineNo  prospective 1-based line number, for the error message
+     */
+    private function readLine($stream, int $lineNo): string|false
+    {
+        $line = '';
+
+        while (true) {
+            $chunk = fgets($stream, self::READ_CHUNK_BYTES + 1);
+
+            if ($chunk === false) {
+                // EOF: return a final newline-less line if we read one, else signal done.
+                return $line === '' ? false : $line;
+            }
+
+            $line .= $chunk;
+
+            if (strlen($line) > self::MAX_LINE_BYTES) {
+                throw new UsageException(
+                    "Line {$lineNo}: exceeds the maximum line length of "
+                    . self::MAX_LINE_BYTES . ' bytes.'
+                );
+            }
+
+            if (str_ends_with($chunk, "\n")) {
+                return $line;
+            }
+            // No newline yet and under the cap — keep reading this same line.
+        }
     }
 
     /**

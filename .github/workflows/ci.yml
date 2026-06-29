@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: json, pdo_sqlite
+          coverage: none
+          tools: composer:v2
+
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ matrix.php }}-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run test suite
+        run: composer test
+
+  phar:
+    name: Build & smoke-test phar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: json, pdo_sqlite
+          coverage: none
+          ini-values: phar.readonly=0
+          tools: composer:v2
+
+      - name: Install runtime dependencies only
+        run: composer install --no-dev --prefer-dist --no-progress
+
+      - name: Build phar
+        run: php build/build-phar.php
+
+      - name: Smoke-test the built phar
+        run: |
+          set -euo pipefail
+          php sdb.phar --version
+          tmp="$(mktemp -d)"
+          php sdb.phar put users alice '{"name":"Alice"}' --data "$tmp"
+          got="$(php sdb.phar get users alice --raw --data "$tmp")"
+          test "$got" = '{"name":"Alice"}'
+          php sdb.phar put p 1 '{"price":100}' --adapter sqlite --data "$tmp"
+          php sdb.phar find p --where price:lt:500 --adapter sqlite --data "$tmp" --raw
+          echo "phar smoke test passed"

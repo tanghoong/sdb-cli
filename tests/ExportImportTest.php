@@ -89,6 +89,21 @@ final class ExportImportTest extends AbstractCliTestCase
         self::assertStringContainsString("'_id' must be a non-empty", $import['err']);
     }
 
+    public function test_import_overlong_line_is_usage_error(): void
+    {
+        // A single line just over the 16 MiB cap must be rejected (exit 2) rather
+        // than read unboundedly into memory. A valid first line confirms the
+        // reader gets that far before the oversized second line trips the limit.
+        $ndjson  = $this->dataDir . DIRECTORY_SEPARATOR . 'huge.ndjson';
+        $oversized = '{"_id":"big","v":"' . str_repeat('x', 16 * 1024 * 1024 + 1024) . '"}';
+        file_put_contents($ndjson, "{\"_id\":\"a\",\"v\":1}\n" . $oversized . "\n");
+
+        $import = $this->sdb(['command' => 'import', 'collection' => 'c', '--from' => $ndjson]);
+        self::assertSame(2, $import['code']);
+        self::assertStringContainsString('Line 2', $import['err']);
+        self::assertStringContainsString('maximum line length', $import['err']);
+    }
+
     public function test_import_missing_file_is_usage_error(): void
     {
         $import = $this->sdb([
