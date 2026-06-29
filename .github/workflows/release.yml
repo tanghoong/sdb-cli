@@ -21,7 +21,14 @@ jobs:
     name: Build & publish phar
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Check out the tag being released. On a tag push this is the default ref
+      # anyway; on a manual workflow_dispatch run it pins the checkout to the
+      # requested tag rather than whatever branch the run was launched from, so
+      # the build and version check always reflect the tag.
+      - name: Check out the released tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
 
       - name: Resolve tag
         id: tag
