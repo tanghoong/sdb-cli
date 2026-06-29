@@ -81,14 +81,14 @@ None of these are blockers for the stated use case (local, single-user, no-infra
 
 ### Findings
 
-1. **`find` buffers the whole result set — even with `--ndjson`.** `QueryBuilder::get()`
-   returns a fully-materialised array; `FindCommand` then copies it into a second `$docs`
-   array (to inject `_id`) before `writeList` iterates. So `--ndjson` on `find` does **not**
-   stream — contrary to the README's "stream large result sets with `--ndjson`" claim,
-   which only holds for `export`. Impact: `find` with no `--limit` holds the entire match
-   set (plus a copy) in memory. *Mitigation:* document that `find` is bounded by `--limit`
-   and use `export` for whole-collection streaming; longer term, a streaming `find` would
-   need a generator-returning `get()` in the library.
+1. **`find` double-buffered its result set (fixed).** `QueryBuilder::get()` returns a
+   fully-materialised array, and `FindCommand` used to copy it into a second `$docs` array
+   (to inject `_id`) before `writeList` iterated — so `--ndjson` held two full copies.
+   `FindCommand` now injects `_id` through a generator, so the `--ndjson` path writes each
+   row as it is produced and only the single array from `get()` is held. The remaining
+   materialisation lives in the library's `get()`; a *fully* lazy `find` (no copy at all)
+   would need a generator-returning `get()` upstream. For whole-collection streaming with
+   constant memory, `export` remains the right tool, and `find` is bounded by `--limit`.
 2. **File adapter filtered queries are O(N) full reads.** `find`/`count --where` on the
    file adapter read and JSON-decode *every* document in PHP. At 50K docs that's ~660 ms
    for a filtered count vs ~36 ms on sqlite (~18× slower) — and it scales linearly. The
