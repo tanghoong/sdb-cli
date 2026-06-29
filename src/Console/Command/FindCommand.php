@@ -53,12 +53,16 @@ final class FindCommand extends AbstractStorageCommand
             $qb->offset($this->intOption('offset', $offset));
         }
 
-        $docs = [];
-        foreach ($qb->get() as $id => $doc) {
-            $docs[] = ['_id' => (string) $id] + $doc;
-        }
+        // Inject the storage id lazily so the --ndjson path can write each row as
+        // it is produced instead of buffering a second full copy of the result set.
+        $results = $qb->get();
+        $withId  = (static function () use ($results): \Generator {
+            foreach ($results as $id => $doc) {
+                yield ['_id' => (string) $id] + $doc;
+            }
+        })();
 
-        $this->writeList($input, $output, $docs);
+        $this->writeList($input, $output, $withId);
 
         return SdbApplication::EXIT_SUCCESS;
     }

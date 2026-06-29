@@ -27,7 +27,7 @@ if (file_exists($pharFile)) {
 $phar = new Phar($pharFile, 0, 'sdb.phar');
 $phar->startBuffering();
 
-$includeRoots = ['bin', 'src', 'vendor'];
+$includeRoots = ['bin', 'src', 'lib', 'vendor'];
 
 // Trim weight that is never needed at runtime.
 $excludePatterns = [

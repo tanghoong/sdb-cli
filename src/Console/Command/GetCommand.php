@@ -7,6 +7,7 @@ namespace Sdb\Console\Command;
 use Sdb\Console\AbstractStorageCommand;
 use Sdb\Console\SdbApplication;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
@@ -35,8 +36,8 @@ final class GetCommand extends AbstractStorageCommand
             $stderr = $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
             $stderr->writeln(sprintf(
                 "<comment>sdb: document '%s' not found in collection '%s'</comment>",
-                $id,
-                $db->getCollection(),
+                OutputFormatter::escape($id),
+                OutputFormatter::escape($db->getCollection()),
             ));
             return SdbApplication::EXIT_NOT_FOUND;
         }

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "7df4b098954365274aa7a841b232dbfa",
+    "content-hash": "91bf9a678e8516572cbf38b1bd449818",
     "packages": [
         {
             "name": "psr/container",
@@ -739,53 +739,6 @@
                 }
             ],
             "time": "2026-05-29T05:06:50+00:00"
-        },
-        {
-            "name": "tanghoong/simpledb",
-            "version": "dev-master",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/tanghoong/SimpleDB.git",
-                "reference": "b8cb57acaea2bb41dbdc32fefd5b4750a5d954b9"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/tanghoong/SimpleDB/zipball/b8cb57acaea2bb41dbdc32fefd5b4750a5d954b9",
-                "reference": "b8cb57acaea2bb41dbdc32fefd5b4750a5d954b9",
-                "shasum": ""
-            },
-            "require": {
-                "php": ">=8.2"
-            },
-            "require-dev": {
-                "phpstan/phpstan": "^1.0",
-                "phpunit/phpunit": "^11.0"
-            },
-            "suggest": {
-                "ext-apcu": "Use ApcuCacheAdapter for shared-memory caching across all PHP-FPM workers",
-                "ext-pdo_sqlite": "Use SqliteAdapter for WAL-mode SQLite storage with native SQL query push-down"
-            },
-            "default-branch": true,
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SimpleDB\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SimpleDB\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "description": "A lightweight NoSQL JSON Document Storage library for PHP",
-            "support": {
-                "source": "https://github.com/tanghoong/SimpleDB/tree/master"
-            },
-            "abandoned": true,
-            "time": "2026-06-29T12:40:57+00:00"
         }
     ],
     "packages-dev": [
@@ -2572,16 +2525,14 @@
         }
     ],
     "aliases": [],
-    "minimum-stability": "dev",
-    "stability-flags": {
-        "tanghoong/simpledb": 20
-    },
-    "prefer-stable": true,
+    "minimum-stability": "stable",
+    "stability-flags": {},
+    "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
         "php": ">=8.2",
         "ext-json": "*"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.6.0"
 }
