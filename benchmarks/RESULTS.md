@@ -117,40 +117,50 @@ None of these are blockers for the stated use case (local, single-user, no-infra
 
 > These are **single-process, warm-disk** numbers from `benchmarks/bench.php`. Treat them
 > as relative throughput, not a datacenter SLA; spinning disk or networked storage will be
-> markedly slower on the file adapter's per-document I/O.
+> markedly slower on the file adapter's per-document I/O. Time figures vary ±20% run to
+> run (filesystem caching); memory figures are stable.
+>
+> **Memory column = `+MiB`**, the increment in true peak allocation *for that operation*
+> over a fixed **48 MiB resident baseline** (the prebuilt 50K-doc dataset that stays in
+> memory for the whole run). The harness calls `memory_reset_peak_usage()` before each
+> operation, so each row measures what that operation allocated — not a process-lifetime
+> high-water mark. `+0.0 MiB` means the operation ran in constant memory (streaming / O(1)).
 
 ### sqlite adapter
 
-| Operation | Time | Throughput | Peak RSS |
+| Operation | Time | Throughput | +MiB |
 |---|--:|--:|--:|
-| import (batchPut, 1000/txn) | 654 ms | ~76K docs/s | 48 MiB |
-| count (no filter) | 1.9 ms | O(1) | 50 MiB |
-| count `--where status=paid` | 36 ms | full scan, 50K | 50 MiB |
-| find `price<500 order:asc limit:10` | 39 ms | 10 returned | 50 MiB |
-| find `shipping.country=MY` (12.5K hits) | 72 ms | ~174K docs/s | 68 MiB |
-| export (stream all) | 93 ms | ~541K docs/s | 68 MiB |
-| list ids | 9 ms | ~5.6M docs/s | 68 MiB |
-| get single (cold cache) ×1000 | 11 ms | ~90K gets/s | 68 MiB |
+| import (batchPut, 1000/txn) | 653 ms | ~77K docs/s | +0.0 |
+| count (no filter) | 1.8 ms | O(1) | +0.0 |
+| count `--where status=paid` | 39 ms | full scan, 50K | +0.0 |
+| find `price<500 order:asc limit:10` | 40 ms | 10 returned | +0.0 |
+| find `shipping.country=MY` (12.5K hits) | 70 ms | ~178K docs/s | +20.0 |
+| export (stream all) | 89 ms | ~560K docs/s | +0.0 |
+| list ids | 8 ms | ~6.2M docs/s | +0.0 |
+| get single (cold cache) ×1000 | 11 ms | ~91K gets/s | +0.0 |
 
 ### file adapter
 
-| Operation | Time | Throughput | Peak RSS |
+| Operation | Time | Throughput | +MiB |
 |---|--:|--:|--:|
-| import (batchPut) | 8341 ms | ~6K docs/s | 68 MiB |
-| count (no filter) | 68 ms | dir scan | 74 MiB |
-| count `--where status=paid` | 664 ms | O(N) reads | 74 MiB |
-| find `price<500 order:asc limit:10` | 852 ms | O(N) reads | 92 MiB |
-| find `shipping.country=MY` (12.5K hits) | 614 ms | ~20K docs/s | 92 MiB |
-| export (stream all) | 554 ms | ~90K docs/s | 92 MiB |
-| list ids | 80 ms | ~625K docs/s | 92 MiB |
-| get single (cold cache) ×1000 | 12 ms | ~84K gets/s | 92 MiB |
+| import (batchPut) | 5044 ms | ~10K docs/s | +0.0 |
+| count (no filter) | 69 ms | dir scan | +6.0 |
+| count `--where status=paid` | 700 ms | O(N) reads | +4.0 |
+| find `price<500 order:asc limit:10` | 959 ms | O(N) reads + sort | +22.0 |
+| find `shipping.country=MY` (12.5K hits) | 699 ms | ~18K docs/s | +2.0 |
+| export (stream all) | 569 ms | ~88K docs/s | +2.0 |
+| list ids | 79 ms | ~631K docs/s | +2.0 |
+| get single (cold cache) ×1000 | 12 ms | ~85K gets/s | +0.0 |
 
 ### Headline ratios (50K docs, this machine)
 
-- **Bulk import: sqlite ~13× faster** than file (654 ms vs 8.3 s) — one fsync/1000 rows
-  beats 50K individual file create+lock+rename cycles.
+- **Bulk import: sqlite ~8–13× faster** than file (≈0.65 s vs 5–8 s; file time swings with
+  fsync/filesystem state) — one fsync/1000 rows beats 50K individual create+lock+rename cycles.
 - **Filtered count/find: sqlite ~18× faster** than file (SQL push-down vs full scan).
 - **Point ops (`get`, `list`)** are comparable on both — neither parses the whole set.
+- **Memory:** `export`/`list`/`count` run in constant memory on both adapters; the cost of
+  a large or ordered `find` is visible as a +20 MiB materialised result set (the only ops
+  that buffer) — which is exactly finding #1 above.
 - **Plus ~43 ms fixed cost** per CLI invocation regardless of adapter.
 
 ### Rule of thumb for capacity

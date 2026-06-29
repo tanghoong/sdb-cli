@@ -24,18 +24,26 @@ use SimpleDB\SimpleDB;
 
 function bench(string $label, callable $fn): void
 {
-    $t0   = hrtime(true);
-    $n    = $fn();
-    $ms   = (hrtime(true) - $t0) / 1e6;
-    $peak = memory_get_peak_usage(true) / 1048576;
+    // memory_get_peak_usage() is a high-water mark since process start, so it must
+    // be reset before each operation — otherwise every row inherits the peak left
+    // by the prebuilt dataset and earlier imports/finds. We report the increment
+    // over the pre-op baseline (which already holds the resident $docs array), so
+    // the figure reflects what *this* operation allocated.
+    memory_reset_peak_usage();
+    $base = memory_get_usage(true);
+
+    $t0    = hrtime(true);
+    $n     = $fn();
+    $ms    = (hrtime(true) - $t0) / 1e6;
+    $delta = max(0, memory_get_peak_usage(true) - $base) / 1048576;
 
     printf(
-        "  %-40s %9.1f ms  %9s docs  %11s docs/s  peak=%.0f MiB\n",
+        "  %-40s %9.1f ms  %9s docs  %11s docs/s  +%.1f MiB\n",
         $label,
         $ms,
         number_format($n),
         number_format($n / max($ms / 1000, 1e-9)),
-        $peak,
+        $delta,
     );
 }
 
@@ -62,6 +70,13 @@ $docs = [];
 for ($i = 0; $i < $N; $i++) {
     $docs[(string) $i] = makeDoc($i);
 }
+
+// The prebuilt dataset stays resident for the whole run; the per-op "+MiB"
+// columns are measured on top of this floor.
+printf(
+    "resident baseline (prebuilt dataset): %.1f MiB\n\n",
+    memory_get_usage(true) / 1048576,
+);
 
 foreach (['sqlite', 'file'] as $adapter) {
     printf("--- adapter: %s ---\n", $adapter);
