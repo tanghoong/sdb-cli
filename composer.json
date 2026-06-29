@@ -8,30 +8,22 @@
         { "name": "tanghoong" }
     ],
     "bin": ["bin/sdb"],
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/tanghoong/SimpleDB"
-        }
-    ],
     "require": {
         "php": ">=8.2",
         "ext-json": "*",
-        "symfony/console": "^7.0",
-        "tanghoong/simpledb": "dev-master#b8cb57acaea2bb41dbdc32fefd5b4750a5d954b9"
+        "symfony/console": "^7.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^11.0"
     },
     "suggest": {
         "ext-pdo_sqlite": "Required by the `sqlite` and `memory` adapters",
-        "ext-apcu": "Enables APCu shared-memory caching in the underlying SimpleDB library"
+        "ext-apcu": "Enables APCu shared-memory caching via the bundled ApcuCacheAdapter"
     },
-    "minimum-stability": "dev",
-    "prefer-stable": true,
     "autoload": {
         "psr-4": {
-            "Sdb\\": "src/"
+            "Sdb\\": "src/",
+            "SimpleDB\\": "lib/simpledb/"
         }
     },
     "autoload-dev": {

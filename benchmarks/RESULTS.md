@@ -41,30 +41,28 @@ both closed. Probes confirmed it:
 - **Strict CLI input typing.** `--limit`/`--offset` are integer-validated and rejected if
   negative; the `_id` reserved-field rule keeps export→import lossless.
 
-### Findings (low severity, by design or local-trust)
+### Findings (all addressed)
 
-1. **Unpinned, abandoned dependency (supply-chain).** `composer.json` requires
-   `tanghoong/simpledb: dev-master` with `minimum-stability: dev`, and Composer reports
-   the package as **abandoned**. `composer.lock` pins commit `b8cb57a`, so installs are
-   reproducible *as long as the lock file is committed and honoured* — but any
-   `composer update` silently pulls whatever `master` is at that moment. Recommend
-   tagging a release and pinning a version constraint (`^1.0`).
-2. **No query/output size ceiling.** `find`/`export`/`count` accept an unbounded
-   collection. On the **file** adapter a filtered `find`/`count` reads *every* document
-   (see perf below); a hostile or accidental 10M-doc collection is a local DoS. For a
-   single-user CLI this is acceptable, but worth a doc note ("use `--limit`, prefer the
-   sqlite adapter for large query workloads").
-3. **Lock-file / temp-file accumulation (file adapter).** Each written id leaves a
-   persistent `<id>.json.lock` next to it, and `tempnam` temp files are only cleaned on
-   the failure path. They are correctly excluded from `listIds`, but they double the
-   inode count of a large collection. Library-side cleanup would help.
-4. **Error messages echo raw user input** inside Symfony's `<error>…</error>` markup
-   (e.g. the rejected name). Cosmetic only — no escaping of pseudo-tags — not exploitable
-   for a local terminal, but worth `OutputFormatter::escape()` for polish.
-5. **Placeholder install URL.** README's `curl … https://example.com/sdb.phar` has no
-   checksum/signature step; once a real download URL exists, publish a SHA-256.
-
-None of these are blockers for the stated use case (local, single-user, no-infra store).
+1. **Unpinned, abandoned dependency (supply-chain) — RESOLVED.** The project used to
+   require `tanghoong/simpledb: dev-master` (Composer-flagged **abandoned**) pulled from a
+   GitHub `repositories` entry under `minimum-stability: dev`. The MIT-licensed storage
+   engine is now **vendored in-tree** at [`lib/simpledb/`](../lib/simpledb) and autoloaded
+   via a `SimpleDB\` PSR-4 mapping. `composer.json` has no external/unpublished package, no
+   `repositories` block, and no dev stability — `symfony/console` is the only runtime dep.
+2. **No query/output size ceiling — DOCUMENTED.** `find`/`export`/`count` accept an
+   unbounded collection; on the **file** adapter a filtered `find`/`count` reads *every*
+   document (see perf below). `export` streams in constant memory and `find` now streams its
+   `--ndjson` output, so the residual risk is CPU on file-adapter full scans — called out in
+   the README with the guidance to use `--limit` and prefer the sqlite adapter at scale.
+3. **Lock-file accumulation (file adapter) — RESOLVED.** `FileAdapter::write` used a
+   per-document `<id>.json.lock` (one permanent inode per id ever written). It now uses a
+   single reusable per-collection `.write.lock`; atomic `rename()` still guarantees
+   integrity, and the lock is excluded from `listIds`. Verified: 5 writes → 1 lock file.
+4. **Error messages echoed raw user input — RESOLVED.** `SdbApplication::fail` and the
+   `get`/`delete` not-found messages now pass user-supplied names through
+   `OutputFormatter::escape()`, so a name like `</error><info>x` renders literally.
+5. **Placeholder install URL — RESOLVED.** The README install step now points at the GitHub
+   release asset and verifies a published `sdb.phar.sha256` before installing.
 
 ---
 

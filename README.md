@@ -16,8 +16,9 @@ SQLite file) under your home folder.
 > 读回来、用过滤和排序查询整个集合、以 NDJSON 流式导出、再导入回来。不需要数据库服务器、
 > 不需要 schema、不需要迁移——只用你主目录下的一个文件夹（或一个 SQLite 文件）即可。
 
-It is a thin CLI over the [`tanghoong/simpledb`](https://github.com/tanghoong/SimpleDB)
-document-storage library. · 它是文档存储库 `tanghoong/simpledb` 之上的一层轻量命令行封装。
+It is a thin CLI over a bundled, MIT-licensed document-storage engine (the `SimpleDB`
+library, vendored in-tree at [`lib/simpledb/`](lib/simpledb) — no external dependency).
+· 它是内置的 MIT 许可文档存储引擎（`SimpleDB` 库，内置于 [`lib/simpledb/`](lib/simpledb)，无外部依赖）之上的一层轻量命令行封装。
 
 ---
 
@@ -60,13 +61,17 @@ far beyond a single machine — reach for a real database there.
 ### Option A — download the phar (recommended) · 方式 A：下载 phar（推荐）
 
 ```bash
-curl -L -o sdb.phar https://example.com/sdb.phar   # or build it yourself, see "Building"
+# Download from the GitHub release, then verify its checksum before installing.
+curl -L -o sdb.phar https://github.com/tanghoong/sdb-cli/releases/latest/download/sdb.phar
+curl -L -o sdb.phar.sha256 https://github.com/tanghoong/sdb-cli/releases/latest/download/sdb.phar.sha256
+sha256sum -c sdb.phar.sha256          # must print "sdb.phar: OK"
 chmod +x sdb.phar
 sudo mv sdb.phar /usr/local/bin/sdb
 sdb --version
 ```
 
-A single self-contained executable. · 一个自包含的单文件可执行程序。
+A single self-contained executable. Always verify the SHA-256 before moving it onto your
+PATH. · 一个自包含的单文件可执行程序；放到 PATH 前请务必校验 SHA-256。
 
 ### Option B — Composer global · 方式 B：Composer 全局安装
 
@@ -89,11 +94,12 @@ php bin/sdb --version
 adapters also need `ext-pdo_sqlite` (ships with PHP). · `sqlite` 和 `memory` 适配器还需要
 `ext-pdo_sqlite`（PHP 自带）。
 
-> **Dependency note · 依赖说明:** until `tanghoong/simpledb` is published to Packagist, this
-> project pulls it from GitHub via a `repositories` entry in `composer.json`
-> (`"tanghoong/simpledb": "dev-master"`). Once it's on Packagist, delete that block and pin a
-> released version — no code changes needed. · 在 `tanghoong/simpledb` 发布到 Packagist 之前，
-> 本项目通过 `composer.json` 的 `repositories` 从 GitHub 拉取它；发布后删掉该段并锁定正式版本即可。
+> **No runtime dependencies beyond `symfony/console` · 除 `symfony/console` 外无运行时依赖.**
+> The document-storage engine (file/sqlite adapters, query builder) is bundled in-tree under
+> [`lib/simpledb/`](lib/simpledb) — MIT-licensed, vendored from the standalone `SimpleDB`
+> library — so there is no external/unpublished package to fetch and nothing to keep in sync.
+> · 文档存储引擎（file/sqlite 适配器、查询构建器）以 MIT 许可内置在 [`lib/simpledb/`](lib/simpledb)，
+> 无需拉取任何外部/未发布的包。
 
 ---
 
@@ -274,16 +280,24 @@ multi-key sorts. · `--order` 接受 `field`（升序）或 `field:asc` / `field
 - **`find` / `count` push down to SQL** on the `sqlite` adapter — `WHERE`, `ORDER BY`,
   `LIMIT`/`OFFSET`, and `COUNT(*)` run as a single `json_extract`-powered query; no documents
   are loaded into PHP. · 在 `sqlite` 适配器上，`find`/`count` 下推为单条 SQL 查询，不把文档载入 PHP。
-- **Stream large result sets with `--ndjson`** instead of buffering a whole JSON array in memory.
-  **用 `--ndjson` 流式输出大结果集**，避免把整个 JSON 数组缓存在内存里。
-- **Repeated invocations?** Enable the OPcache CLI file cache to cut PHP's per-process startup:
-  **频繁调用？** 开启 OPcache CLI 文件缓存以降低每次进程启动开销：
+- **Prefer `sqlite` for query-heavy workloads.** On the `file` adapter a filtered
+  `find`/`count` must read and decode **every** document in PHP (O(N)); benchmarks show it
+  ~18× slower than the SQL push-down at 50K docs. The `file` adapter shines for storage and
+  point reads (`get`/`list`); switch to `sqlite` once you filter or sort large collections.
+  **查询密集型负载请用 `sqlite`**——`file` 适配器的过滤 `find`/`count` 需在 PHP 里读取并解析每个文档（O(N)），
+  5 万文档实测比 SQL 下推慢约 18 倍。
+- **Stream whole collections with `export`** (constant memory on both adapters). `find`
+  materialises its result set, but `--ndjson` still avoids buffering a second copy and is
+  bounded by `--limit`. · 用 `export` 以常数内存流式导出整个集合；`find` 会物化结果集，但 `--ndjson`
+  仍能避免再复制一份，并受 `--limit` 限制。
+- **Repeated invocations?** Each `sdb` call pays a fixed PHP cold-start (~40 ms here), so for
+  bulk work prefer one `import`/`export` over a shell loop of per-document `put`/`get`.
+  **频繁调用？** 每次 `sdb` 调用都有固定的 PHP 冷启动开销（此机约 40 ms），批量操作请用一次
+  `import`/`export`，而不是在 shell 里循环逐条 `put`/`get`。
 
-  ```ini
-  ; php.ini
-  opcache.enable_cli=1
-  opcache.file_cache=/tmp/php-opcache
-  ```
+See [`benchmarks/RESULTS.md`](benchmarks/RESULTS.md) for full numbers and the methodology
+(`php benchmarks/bench.php` to reproduce). · 完整数据与方法见
+[`benchmarks/RESULTS.md`](benchmarks/RESULTS.md)。
 
 ---
 
@@ -329,23 +343,17 @@ make test            # or: php vendor/bin/phpunit   ·   38 tests
 php bin/sdb --help
 ```
 
-### Co-developing the SimpleDB library · 同时开发 SimpleDB 库
+### The bundled storage engine · 内置的存储引擎
 
-To hack on `tanghoong/simpledb` locally, point Composer at your checkout by replacing the
-`repositories` entry in `composer.json` · 要在本地修改该库，把 `composer.json` 的 `repositories` 改为：
-
-```json
-"repositories": [
-    { "type": "path", "url": "../SimpleDB", "options": { "symlink": true } }
-],
-"require": { "tanghoong/simpledb": "@dev" }
-```
-
-Then `composer update tanghoong/simpledb`. Edits in `../SimpleDB` are picked up immediately.
-然后执行 `composer update tanghoong/simpledb`；`../SimpleDB` 里的改动会立即生效。
+The document-storage engine lives in [`lib/simpledb/`](lib/simpledb) (namespace `SimpleDB\`,
+autoloaded via `composer.json`). It is vendored in-tree — there is no external package to
+install or update — so changes to an adapter or the query builder are edited directly there
+and picked up immediately. · 存储引擎位于 [`lib/simpledb/`](lib/simpledb)（命名空间 `SimpleDB\`，
+由 `composer.json` 自动加载），内置在仓库中，无需安装或更新外部包，直接修改即可生效。
 
 ---
 
 ## License · 许可证
 
-MIT.
+MIT. The bundled `lib/simpledb/` engine is also MIT-licensed.
+· 本项目采用 MIT 许可；内置的 `lib/simpledb/` 引擎同样为 MIT 许可。

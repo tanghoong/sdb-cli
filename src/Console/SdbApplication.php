@@ -17,6 +17,7 @@ use SimpleDB\Exceptions\DocumentNotFoundException;
 use SimpleDB\Exceptions\SimpleDBException;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Exception\ExceptionInterface as ConsoleExceptionInterface;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -80,7 +81,9 @@ final class SdbApplication extends Application
     private function fail(OutputInterface $output, string $message, int $code): int
     {
         $stderr = $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
-        $stderr->writeln('<error>sdb: ' . $message . '</error>');
+        // Escape the message: it may contain user input (e.g. a rejected name) and
+        // must not be interpreted as Symfony console markup.
+        $stderr->writeln('<error>sdb: ' . OutputFormatter::escape($message) . '</error>');
 
         return $code;
     }
