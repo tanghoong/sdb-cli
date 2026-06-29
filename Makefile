@@ -3,7 +3,7 @@ COMPOSER ?= composer
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install test phar clean
+.PHONY: help install test demo phar clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -14,6 +14,9 @@ install: ## Install dependencies (including dev)
 
 test: ## Run the PHPUnit test suite
 	$(PHP) vendor/bin/phpunit
+
+demo: ## Run the example demo against a throwaway store
+	bash examples/demo.sh
 
 phar: ## Build a self-contained sdb.phar (production deps only)
 	$(COMPOSER) install --no-dev --optimize-autoloader --quiet

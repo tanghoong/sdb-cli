@@ -19,6 +19,9 @@ use SimpleDB\Query\QueryBuilder;
  * Supported operators: =  !=  >  >=  <  <=  in  not_in
  *                       contains  starts_with  ends_with  null  not_null
  *
+ * Shell-safe word aliases for the comparison operators (no quoting needed in
+ * PowerShell/cmd): eq(=) ne(!=) lt(<) lte(<=) gt(>) gte(>=).
+ *
  * Values are coerced: integers, floats, true/false, and null are detected;
  * everything else stays a string. `in`/`not_in` take a comma-separated list.
  */
@@ -32,6 +35,17 @@ final class WhereParser
     private const UNARY = ['null', 'not_null'];
     private const LIST_OPS = ['in', 'not_in'];
     private const STRING_OPS = ['contains', 'starts_with', 'ends_with'];
+
+    /**
+     * Word aliases for the comparison operators. They contain no characters that
+     * shells treat specially, so `price:lt:500` works unquoted in PowerShell, cmd,
+     * and bash — unlike `price:<:500`, where `<`/`>` are redirection operators.
+     */
+    private const OP_ALIASES = [
+        'eq' => '=',  'ne' => '!=', 'neq' => '!=',
+        'lt' => '<',  'lte' => '<=', 'le' => '<=',
+        'gt' => '>',  'gte' => '>=', 'ge' => '>=',
+    ];
 
     /**
      * Apply every --where clause to the builder.
@@ -71,10 +85,9 @@ final class WhereParser
     {
         // field:op[:value]  — op restricted to known operator characters
         if (preg_match('/^([^:]+):([a-z_!<>=]+)(?::(.*))?$/s', $clause, $m) === 1
-            && in_array($m[2], self::OPERATORS, true)
+            && in_array($op = (self::OP_ALIASES[$m[2]] ?? $m[2]), self::OPERATORS, true)
         ) {
             $field = $m[1];
-            $op    = $m[2];
             $rawValue = $m[3] ?? null;
 
             if (in_array($op, self::UNARY, true)) {

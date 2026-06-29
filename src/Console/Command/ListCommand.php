@@ -25,12 +25,10 @@ final class ListCommand extends AbstractStorageCommand
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $db  = $this->openDb($input);
-        $ids = [];
-
-        foreach ($db->stream() as $id => $_doc) {
-            $ids[] = (string) $id;
-        }
+        // listIds() is a cheap directory scan (file) or `SELECT id` (sqlite) —
+        // no documents are read, so this stays fast on large collections.
+        $collection = (string) $input->getArgument('collection');
+        $ids        = array_map(strval(...), $this->openAdapter($input)->listIds($collection));
 
         $this->writeList($input, $output, $ids);
 

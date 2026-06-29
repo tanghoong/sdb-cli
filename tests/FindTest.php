@@ -44,6 +44,27 @@ final class FindTest extends AbstractCliTestCase
         self::assertSame(['Gizmo', 'Widget'], $names); // price < 500, sorted asc by name
     }
 
+    public function test_find_word_alias_operators_match_symbols(): void
+    {
+        $this->seed();
+
+        // price:lt:500 must behave exactly like price:<:500 (shell-safe form).
+        $alias = $this->sdb([
+            'command'    => 'find',
+            'collection' => 'products',
+            '--where'    => ['price:lt:500'],
+            '--order'    => ['name:asc'],
+        ]);
+        self::assertSame(['Gizmo', 'Widget'], array_column($this->decode($alias['out']), 'name'));
+
+        $gte = $this->sdb([
+            'command'    => 'find',
+            'collection' => 'products',
+            '--where'    => ['price:gte:700'],
+        ]);
+        self::assertSame(['Gadget'], array_column($this->decode($gte['out']), 'name'));
+    }
+
     public function test_find_equality_coerces_numeric_value(): void
     {
         $this->seed();

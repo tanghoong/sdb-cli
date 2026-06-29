@@ -29,14 +29,34 @@ final class ImportCommand extends AbstractStorageCommand
             );
     }
 
+    /** Flush documents in batches of this size — one transaction per chunk on sqlite. */
+    private const BATCH_SIZE = 1000;
+
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $db     = $this->openDb($input);
         $from   = $input->getOption('from');
         $stream = $this->openInputStream($from === null ? null : (string) $from);
 
-        $count    = 0;
-        $lineNo   = 0;
+        $count  = 0;
+        $lineNo = 0;
+
+        /** @var array<string, array> $putBuffer  documents with an explicit _id */
+        $putBuffer = [];
+        /** @var list<array> $postBuffer  documents needing a generated id */
+        $postBuffer = [];
+
+        $flush = static function () use ($db, &$putBuffer, &$postBuffer): void {
+            if ($putBuffer !== []) {
+                $db->batchPut($putBuffer);   // single transaction on sqlite
+                $putBuffer = [];
+            }
+            if ($postBuffer !== []) {
+                $db->batchPost($postBuffer);
+                $postBuffer = [];
+            }
+        };
+
         try {
             while (($line = fgets($stream)) !== false) {
                 $lineNo++;
@@ -45,27 +65,22 @@ final class ImportCommand extends AbstractStorageCommand
                     continue;
                 }
 
-                try {
-                    $doc = Json::decodeDocument($line);
-                } catch (UsageException $e) {
-                    throw new UsageException("Line {$lineNo}: " . $e->getMessage());
-                }
+                [$id, $doc] = $this->parseLine($line, $lineNo);
 
-                if (array_key_exists('_id', $doc)) {
-                    $id = (string) $doc['_id'];
-                    unset($doc['_id']);
-
-                    if ($id === '') {
-                        throw new UsageException("Line {$lineNo}: '_id' must be a non-empty string.");
-                    }
-
-                    $db->put($id, $doc);
+                if ($id !== null) {
+                    $putBuffer[$id] = $doc;
                 } else {
-                    $db->post($doc);
+                    $postBuffer[] = $doc;
                 }
 
                 $count++;
+
+                if (count($putBuffer) + count($postBuffer) >= self::BATCH_SIZE) {
+                    $flush();
+                }
             }
+
+            $flush();
         } finally {
             if ($from !== null) {
                 fclose($stream);
@@ -75,6 +90,33 @@ final class ImportCommand extends AbstractStorageCommand
         $output->writeln((string) $count);
 
         return SdbApplication::EXIT_SUCCESS;
+    }
+
+    /**
+     * Decode one NDJSON line into [explicitId|null, document].
+     *
+     * @return array{0: string|null, 1: array}
+     */
+    private function parseLine(string $line, int $lineNo): array
+    {
+        try {
+            $doc = Json::decodeDocument($line);
+        } catch (UsageException $e) {
+            throw new UsageException("Line {$lineNo}: " . $e->getMessage());
+        }
+
+        if (!array_key_exists('_id', $doc)) {
+            return [null, $doc];
+        }
+
+        $id = (string) $doc['_id'];
+        unset($doc['_id']);
+
+        if ($id === '') {
+            throw new UsageException("Line {$lineNo}: '_id' must be a non-empty string.");
+        }
+
+        return [$id, $doc];
     }
 
     /**

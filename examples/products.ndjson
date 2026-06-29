@@ -1,0 +1,5 @@
+{"_id":"p1","name":"Widget","price":300,"stock":5,"tags":["tools"]}
+{"_id":"p2","name":"Gadget","price":700,"stock":0,"tags":["tools","new"]}
+{"_id":"p3","name":"Gizmo","price":150,"stock":12,"tags":["toys"]}
+{"_id":"p4","name":"Sprocket","price":420,"stock":3,"tags":["tools"]}
+{"_id":"p5","name":"Doohickey","price":90,"stock":40,"tags":["toys","sale"]}

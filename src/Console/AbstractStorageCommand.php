@@ -6,6 +6,7 @@ namespace Sdb\Console;
 
 use Sdb\Support\Json;
 use Sdb\Support\Storage;
+use SimpleDB\Contracts\StorageInterface;
 use SimpleDB\SimpleDB;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -59,6 +60,17 @@ abstract class AbstractStorageCommand extends Command
         $data = $input->getOption('data');
 
         return Storage::open($collection, $adapter, $data);
+    }
+
+    /** Open just the storage adapter (no SimpleDB wrapper) for cheap metadata calls. */
+    protected function openAdapter(InputInterface $input): StorageInterface
+    {
+        /** @var string $adapter */
+        $adapter = $input->getOption('adapter');
+        /** @var string|null $data */
+        $data = $input->getOption('data');
+
+        return Storage::adapter($adapter, $data);
     }
 
     /** Render a single value as pretty (default) or compact (--raw) JSON. */

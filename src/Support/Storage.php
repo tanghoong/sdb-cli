@@ -29,7 +29,18 @@ final class Storage
      */
     public static function open(string $collection, string $adapter, ?string $dataDir): SimpleDB
     {
-        return new SimpleDB($collection, self::makeAdapter($adapter, self::resolveDataDir($dataDir)));
+        return new SimpleDB($collection, self::adapter($adapter, $dataDir));
+    }
+
+    /**
+     * Build just the storage adapter — used by commands (e.g. `list`) that can
+     * call a cheap StorageInterface method directly without a SimpleDB wrapper.
+     *
+     * @throws UsageException|StorageException
+     */
+    public static function adapter(string $adapter, ?string $dataDir): StorageInterface
+    {
+        return self::makeAdapter($adapter, self::resolveDataDir($dataDir));
     }
 
     private static function makeAdapter(string $adapter, string $dataDir): StorageInterface

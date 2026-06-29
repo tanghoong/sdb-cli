@@ -26,9 +26,10 @@ final class FindCommand extends AbstractStorageCommand
             ->addOutputOptions()
             ->setHelp(
                 "Return matching documents as a JSON array. Each result carries its storage ID in an <info>_id</info> field.\n\n"
-                . "  <info>sdb find products --where price:<:500 --order name:asc --limit 10</info>\n"
+                . "  <info>sdb find products --where price:lt:500 --order name:asc --limit 10</info>\n"
                 . "  <info>sdb find users --where 'role:in:admin,moderator' --ndjson</info>\n\n"
-                . "Operators: =  !=  >  >=  <  <=  in  not_in  contains  starts_with  ends_with  null  not_null"
+                . "Operators: =  !=  >  >=  <  <=  in  not_in  contains  starts_with  ends_with  null  not_null\n"
+                . "Shell-safe aliases (no quoting): eq ne lt lte gt gte"
             );
     }
 

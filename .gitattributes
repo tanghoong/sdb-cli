@@ -1,8 +1,9 @@
 # Normalize line endings in the repo; check out native on each platform.
 * text=auto
 
-# The CLI entrypoint is a shebang script — it MUST stay LF or it breaks on *nix.
+# Shebang scripts MUST stay LF or they break on *nix (`bash: \r: command not found`).
 /bin/sdb text eol=lf
+*.sh text eol=lf
 
 # Built artifact (also gitignored) — never normalize.
 *.phar binary
